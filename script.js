@@ -3,9 +3,9 @@ let greenNumber = 300;
 let noteDuration = (greenNumber * 0.016666) / 10; // 秒数
 let buttonAssignments = Array(18).fill().map((_, i) => i); // ボタン0-17をレーン0-17に
 let lastPressTimes = Array(18).fill(0);
-let activeNotes = Array(18).fill(null); // アクティブなノーツを追跡
+let activeNotes = Array(18).fill().map(() => []); // レーンごとのノーツリスト
 const lanes = document.querySelectorAll('.lane');
-const notes = document.querySelectorAll('.note');
+const MAX_NOTES_PER_LANE = 10; // パフォーマンスのため最大ノーツ数制限
 
 // フレームレート設定
 function setFPS(value) {
@@ -19,10 +19,13 @@ function setFPS(value) {
 // ノーツ速度更新
 function updateNoteSpeed() {
     noteDuration = (greenNumber * 0.016666) / 10;
-    lanes.forEach((lane, index) => {
-        if (activeNotes[index]) {
-            activeNotes[index].style.transitionDuration = `${noteDuration}s`;
-        }
+    activeNotes.forEach((notes, laneIndex) => {
+        notes.forEach(note => {
+            note.style.transitionDuration = `${noteDuration}s`;
+            if (note.dataset.isMoving) {
+                note.style.top = '100%';
+            }
+        });
     });
 }
 
@@ -39,25 +42,21 @@ function updateGreenNumber(value) {
 function initButtonAssignments() {
     const container = document.getElementById('button-assignments');
     container.innerHTML = '';
-    lanes.forEach((_, i) => {
-        const input = document.createElement('input');
-        input.type = 'number';
-        input.className = 'assignment-input';
-        input.value = buttonAssignments[i];
-        input.min = 0;
-        input.max = 255; // 一般的なジョイスティックボタンの最大値
-        input.dataset.lane = i;
-        input.addEventListener('change', (e) => {
+    lanes.forEach((lane, i) => {
+        const label = lane.querySelector('.lane-label').value;
+        const div = document.createElement('div');
+        div.innerHTML = `<label>${label}:</label><input type="number" class="assignment-input" value="${buttonAssignments[i]}" min="0" max="255" data-lane="${i}">`;
+        container.appendChild(div);
+        div.querySelector('input').addEventListener('change', (e) => {
             buttonAssignments[i] = parseInt(e.target.value);
             saveSettings();
         });
-        container.appendChild(input);
     });
 }
 
 // ノーツ生成
 function createNote(laneIndex) {
-    if (activeNotes[laneIndex]) return; // ノーツ重複防止
+    if (activeNotes[laneIndex].length >= MAX_NOTES_PER_LANE) return; // 最大数制限
     const lane = lanes[laneIndex];
     const note = document.createElement('div');
     note.className = 'note';
@@ -67,24 +66,58 @@ function createNote(laneIndex) {
     );
     note.style.transitionDuration = `${noteDuration}s`;
     lane.appendChild(note);
-    activeNotes[laneIndex] = note;
+    activeNotes[laneIndex].push(note);
+    
+    // ノーツを即座に移動開始
+    note.dataset.isMoving = 'true';
     setTimeout(() => {
         note.style.top = '100%';
         setTimeout(() => {
-            if (activeNotes[laneIndex] === note) {
-                note.remove();
-                activeNotes[laneIndex] = null;
-            }
+            note.remove();
+            activeNotes[laneIndex] = activeNotes[laneIndex].filter(n => n !== note);
         }, noteDuration * 1000);
     }, 0);
 }
 
-// ロングノーツ更新
-function updateNoteToLong(laneIndex, duration) {
-    if (!activeNotes[laneIndex]) return;
-    const note = activeNotes[laneIndex];
-    const height = Math.min((duration / noteDuration) * 20, lane.clientHeight);
-    note.style.height = `${height}px`;
+// ロングノーツ開始
+function startLongNote(laneIndex) {
+    if (activeNotes[laneIndex].length >= MAX_NOTES_PER_LANE) return;
+    const lane = lanes[laneIndex];
+    const note = document.createElement('div');
+    note.className = 'note';
+    note.classList.add(
+        laneIndex < 2 || laneIndex >= 16 ? 'scratch' :
+        (laneIndex - 2) % 2 === 0 ? 'white' : 'blue'
+    );
+    note.style.transitionDuration = `${noteDuration}s`;
+    note.dataset.startTime = Date.now();
+    lane.appendChild(note);
+    activeNotes[laneIndex].push(note);
+    return note;
+}
+
+// ロングノーツ終了
+function endLongNote(laneIndex, note) {
+    const duration = (Date.now() - parseInt(note.dataset.startTime)) / 1000;
+    if (duration < 0.067) {
+        // ショートノーツとして処理
+        note.dataset.isMoving = 'true';
+        note.style.top = '100%';
+        setTimeout(() => {
+            note.remove();
+            activeNotes[laneIndex] = activeNotes[laneIndex].filter(n => n !== note);
+        }, noteDuration * 1000);
+    } else {
+        // ロングノーツ
+        const height = Math.min((duration / noteDuration) * 20, lane.clientHeight);
+        note.style.height = `${height}px`;
+        note.dataset.isMoving = 'true';
+        note.style.top = '100%';
+        setTimeout(() => {
+            note.remove();
+            activeNotes[laneIndex] = activeNotes[laneIndex].filter(n => n !== note);
+        }, noteDuration * 1000);
+    }
 }
 
 // Gamepad入力処理
@@ -98,11 +131,12 @@ function handleGamepad() {
             const now = Date.now();
             if (button.pressed && lastPressTimes[laneIndex] === 0) {
                 lastPressTimes[laneIndex] = now;
-                createNote(laneIndex);
+                const note = startLongNote(laneIndex);
+                activeNotes[laneIndex][activeNotes[laneIndex].length - 1] = note;
             } else if (!button.pressed && lastPressTimes[laneIndex] !== 0) {
-                const pressDuration = (now - lastPressTimes[laneIndex]) / 1000;
-                if (pressDuration >= 0.067) {
-                    updateNoteToLong(laneIndex, pressDuration);
+                const note = activeNotes[laneIndex][activeNotes[laneIndex].length - 1];
+                if (note && !note.dataset.isMoving) {
+                    endLongNote(laneIndex, note);
                 }
                 lastPressTimes[laneIndex] = 0;
             }
@@ -238,7 +272,10 @@ document.getElementById('black-key-color').addEventListener('change', () => {
     saveSettings();
 });
 document.querySelectorAll('.lane-label').forEach(input => {
-    input.addEventListener('change', saveSettings);
+    input.addEventListener('change', () => {
+        initButtonAssignments();
+        saveSettings();
+    });
 });
 
 // 初期化
