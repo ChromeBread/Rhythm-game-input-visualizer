@@ -2,252 +2,180 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>Beatmania IIDX Joystick Visualizer</title>
+    <title>Beatmania IIDX Style Joystick Visualizer</title>
     <style>
-        body { margin: 0; background: #000; font-family: Arial, sans-serif; color: #fff; }
-        #canvas { display: block; background: #000; }
-        .controls { padding: 10px; }
-        .lane { display: inline-block; text-align: center; margin: 0 2px; }
-        .lane-label { color: #fff; font-size: 12px; }
-        .note { position: absolute; width: 30px; height: 10px; border-radius: 2px; }
-        .config { margin: 10px; }
-        input[type="color"], input[type="text"] { width: 80px; }
-        #fps-toggle { padding: 5px 10px; }
-        #green-number { width: 60px; }
-        #export, #import { margin: 5px; }
-        #reset { background: #f00; color: #fff; padding: 5px 10px; }
+        body { background: #222; color: #fff; font-family: Arial, sans-serif; margin: 0; }
+        #game-container { display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        #lanes { display: flex; gap: 5px; }
+        .lane { width: 40px; height: 600px; position: relative; overflow: hidden; }
+        .scratch { background: #000; }
+        .white-key { background: #666; }
+        .black-key { background: #000; }
+        .note { position: absolute; width: 100%; height: 10px; transition: top linear; }
+        .note.scratch { background: #ff0000; }
+        .note.white { background: #ffffff; }
+        .note.blue { background: #00b7eb; }
+        .lane input { width: 100%; text-align: center; background: #333; color: #fff; border: none; }
+        .lane input.color { width: 80px; }
+        .controlsAbleton Live 11 Suite (VST) by Ableton - 10% off at Plugin Boutique with code: BPB10
+        .controls { margin-top: 10px; display: flex; gap: 10px; }
+        #export, #import { display: none; }
     </style>
 </head>
 <body>
-    <canvas id="canvas"></canvas>
-    <div class="controls">
+    <div id="game-container">
         <div id="lanes"></div>
-        <div class="config">
-            <label>Green Number: <input type="range" id="green-number-slider" min="200" max="400" value="330"></label>
-            <input type="number" id="green-number" value="330" min="200" max="400"> ms
-            <button id="fps-toggle">Switch to 60fps</button>
-            <button id="export">Export Config</button>
-            <input type="file" id="import" accept=".txt">
-            <button id="reset">Reset to Default</button>
+        <div class="controls">
+            <button onclick="toggleFPS()">FPS: <span id="fps">60</span></button>
+            <label>緑数字: <input type="number" id="greenNumber" value="330" min="100" max="1000"></label>
+            <input type="range" id="greenSlider" min="100" max="1000" value="330">
+            <button onclick="resetSettings()">リセット</button>
+            <button onclick="exportSettings()">エクスポート</button>
+            <input type="file" id="import" accept=".txt" onchange="importSettings()">
         </div>
     </div>
-
     <script>
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
-        const lanesContainer = document.getElementById('lanes');
-        const fpsToggle = document.getElementById('fps-toggle');
-        const greenNumberSlider = document.getElementById('green-number-slider');
-        const greenNumberInput = document.getElementById('green-number');
-        const exportBtn = document.getElementById('export');
-        const importInput = document.getElementById('import');
-        const resetBtn = document.getElementById('reset');
-
-        // デフォルト設定
-        let config = {
-            laneColors: [
-                '#000000', '#4a4a4a', '#000000', '#4a4a4a', '#000000', '#4a4a4a', '#000000', // 鍵盤
-                '#4a4a4a', '#000000', '#4a4a4a', '#000000', '#4a4a4a', '#000000', '#4a4a4a', // 鍵盤
-                '#ff0000', '#ff0000', '#ff0000', '#ff0000' // スクラッチ
-            ],
-            buttonAssignments: [
-                'LP', 'MP', 'HP', 'LK', 'MK', 'HK', 'P+K', // 鍵盤
-                'P', 'K', 'P+M', 'M+K', 'P+K', 'M', 'K', // 鍵盤
-                'SCR1', 'SCR2', 'SCR3', 'SCR4' // スクラッチ
-            ],
-            greenNumber: 330,
-            fps: 60
-        };
-
-        // ローカルストレージから設定を読み込む
-        const savedConfig = localStorage.getItem('iidx-visualizer-config');
-        if (savedConfig) {
-            config = JSON.parse(savedConfig);
-        }
-
-        const laneCount = 18;
-        const laneWidth = 30;
-        const laneHeight = 400;
-        canvas.width = laneWidth * laneCount;
-        canvas.height = laneHeight;
-
+        const lanes = Array(18).fill().map((_, i) => ({
+            type: i < 2 ? 'scratch' : i < 9 ? (i % 2 ? 'black' : 'white') : i < 16 ? (i % 2 ? 'white' : 'black') : 'scratch',
+            button: i < 16 ? `Button ${i}` : i === 16 ? 'Axis 0+' : 'Axis 0-',
+            color: i < 2 || i >= 16 ? '#000000' : i % 2 ? '#000000' : '#666666'
+        }));
+        let fps = 60;
+        let greenNumber = 330;
         let notes = [];
-        let pressedButtons = {};
-        let frameTime = config.fps === 60 ? 1000 / 60 : 1000 / 30;
+        let lastFrame = performance.now();
 
-        // レーン描画
-        function drawLanes() {
-            lanesContainer.innerHTML = '';
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            for (let i = 0; i < laneCount; i++) {
-                // キャンバスにレーン描画
-                ctx.fillStyle = config.laneColors[i];
-                ctx.fillRect(i * laneWidth, 0, laneWidth - 2, laneHeight);
-
-                // レーン下にラベルとカラー設定
-                const laneDiv = document.createElement('div');
-                laneDiv.className = 'lane';
-                laneDiv.innerHTML = `
-                    <input type="color" class="lane-color" data-index="${i}" value="${config.laneColors[i]}">
-                    <input type="text" class="lane-button" data-index="${i}" value="${config.buttonAssignments[i]}" size="4">
-                    <div class="lane-label">${config.buttonAssignments[i]}</div>
-                `;
-                lanesContainer.appendChild(laneDiv);
-            }
+        function init() {
+            loadSettings();
+            renderLanes();
+            requestAnimationFrame(gameLoop);
         }
 
-        // ノーツ描画
-        function drawNotes() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            drawLanes();
-            const noteSpeed = laneHeight / (config.greenNumber * 0.01666 / 10); // 緑数字から速度計算
-            notes = notes.filter(note => note.y < laneHeight);
-            notes.forEach(note => {
-                ctx.fillStyle = note.isLong ? '#00ff00' : '#ffffff';
-                ctx.fillRect(note.lane * laneWidth, note.y, laneWidth - 2, note.isLong ? note.height : 10);
-                note.y += noteSpeed * (frameTime / 1000);
-                if (note.isLong && note.duration > 0) {
-                    note.height = Math.max(10, (note.duration / 1000) * noteSpeed);
-                    note.duration -= frameTime;
-                }
+        function renderLanes() {
+            const lanesDiv = document.getElementById('lanes');
+            lanesDiv.innerHTML = '';
+            lanes.forEach((lane, i) => {
+                const div = document.createElement('div');
+                div.className = `lane ${lane.type}`;
+                div.style.background = lane.color;
+                div.innerHTML = `
+                    <input type="text" value="${lane.button}" onchange="lanes[${i}].button = this.value; saveSettings()">
+                    <input type="color" class="color" value="${lane.color}" onchange="lanes[${i}].color = this.value; this.parentNode.style.background = this.value; saveSettings()">
+                `;
+                lanesDiv.appendChild(div);
             });
         }
 
-        // ジョイスティック入力ハンドリング（仮：キー入力でシミュレーション）
-        document.addEventListener('keydown', e => {
-            const button = e.key.toUpperCase();
-            if (!pressedButtons[button]) {
-                pressedButtons[button] = { startTime: Date.now() };
-                const laneIndex = config.buttonAssignments.indexOf(button);
-                if (laneIndex !== -1) {
-                    notes.push({ lane: laneIndex, y: 0, isLong: false, duration: 0 });
-                }
-            }
-        });
-
-        document.addEventListener('keyup', e => {
-            const button = e.key.toUpperCase();
-            if (pressedButtons[button]) {
-                const duration = Date.now() - pressedButtons[button].startTime;
-                if (duration >= 67) { // 0.067秒以上でロングノーツ
-                    const laneIndex = config.buttonAssignments.indexOf(button);
-                    if (laneIndex !== -1) {
-                        const note = notes.find(n => n.lane === laneIndex && !n.isLong);
-                        if (note) {
-                            note.isLong = true;
-                            note.duration = duration;
-                        }
+        function gameLoop(time) {
+            const delta = (time - lastFrame) / 1000;
+            lastFrame = time;
+            const gamepad = navigator.getGamepads()[0];
+            if (gamepad) {
+                lanes.forEach((lane, i) => {
+                    const isPressed = i < 16 ? gamepad?.buttons[i]?.pressed : i === 16 ? gamepad?.axes[0] > 0.5 : gamepad?.axes[0] < -0.5;
+                    if (isPressed && !notes.some(n => n.lane === i && n.active)) {
+                        notes.push({ lane: i, time: 0, long: false, startTime: time, active: true });
                     }
+                    notes.filter(n => n.lane === i && n.active).forEach(note => {
+                        if (!isPressed && note.time > 0.067) note.active = false;
+                        if (!isPressed && !note.long) note.active = false;
+                        if (note.time > 0.067) note.long = true;
+                    });
+                });
+            }
+
+            const noteTime = greenNumber * 0.001666;
+            notes = notes.filter(note => note.time < noteTime);
+            notes.forEach(note => {
+                note.time += delta;
+                const laneDiv = document.getElementById('lanes').children[note.lane];
+                let noteDiv = document.getElementById(`note-${note.lane}-${note.startTime}`);
+                if (!noteDiv) {
+                    noteDiv = document.createElement('div');
+                    noteDiv.id = `note-${note.lane}-${note.startTime}`;
+                    noteDiv.className = `note ${lanes[note.lane].type === 'scratch' ? 'scratch' : note.lane % 2 ? 'blue' : 'white'}`;
+                    laneDiv.appendChild(noteDiv);
                 }
-                delete pressedButtons[button];
-            }
-        });
+                const height = note.long && note.active ? (time - note.startTime) / 1000 * 600 / noteTime : 10;
+                noteDiv.style.height = `${height}px`;
+                noteDiv.style.top = `${note.time / noteTime * 600}px`;
+                if (note.time >= noteTime) {
+                    noteDiv.remove();
+                }
+            });
 
-        // FPS切り替え
-        fpsToggle.addEventListener('click', () => {
-            config.fps = config.fps === 60 ? 30 : 60;
-            frameTime = 1000 / config.fps;
-            fpsToggle.textContent = `Switch to ${config.fps === 60 ? 30 : 60}fps`;
-            saveConfig();
-        });
-
-        // 緑数字設定
-        greenNumberSlider.addEventListener('input', () => {
-            config.greenNumber = parseInt(greenNumberSlider.value);
-            greenNumberInput.value = config.greenNumber;
-            saveConfig();
-        });
-        greenNumberInput.addEventListener('input', () => {
-            config.greenNumber = Math.min(400, Math.max(200, parseInt(greenNumberInput.value) || 330));
-            greenNumberSlider.value = config.greenNumber;
-            saveConfig();
-        });
-
-        // カラーとボタン割り当て変更
-        lanesContainer.addEventListener('input', e => {
-            const index = parseInt(e.target.dataset.index);
-            if (e.target.classList.contains('lane-color')) {
-                config.laneColors[index] = e.target.value;
-            } else if (e.target.classList.contains('lane-button')) {
-                config.buttonAssignments[index] = e.target.value.toUpperCase();
-                lanesContainer.querySelectorAll('.lane-label')[index].textContent = e.target.value.toUpperCase();
-            }
-            saveConfig();
-        });
-
-        // 設定保存
-        function saveConfig() {
-            localStorage.setItem('iidx-visualizer-config', JSON.stringify(config));
+            requestAnimationFrame(gameLoop);
         }
 
-        // エクスポート
-        exportBtn.addEventListener('click', () => {
-            const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'text/plain' });
+        function toggleFPS() {
+            fps = fps === 60 ? 30 : 60;
+            document.getElementById('fps').textContent = fps;
+            saveSettings();
+        }
+
+        document.getElementById('greenNumber').addEventListener('input', e => {
+            greenNumber = parseInt(e.target.value);
+            document.getElementById('greenSlider').value = greenNumber;
+            saveSettings();
+        });
+
+        document.getElementById('greenSlider').addEventListener('input', e => {
+            greenNumber = parseInt(e.target.value);
+            document.getElementById('greenNumber').value = greenNumber;
+            saveSettings();
+        });
+
+        function saveSettings() {
+            localStorage.setItem('settings', JSON.stringify({ lanes, fps, greenNumber }));
+        }
+
+        function loadSettings() {
+            const settings = JSON.parse(localStorage.getItem('settings'));
+            if (settings) {
+                Object.assign(lanes, settings.lanes);
+                fps = settings.fps;
+                greenNumber = settings.greenNumber;
+                document.getElementById('fps').textContent = fps;
+                document.getElementById('greenNumber').value = greenNumber;
+                document.getElementById('greenSlider').value = greenNumber;
+            }
+        }
+
+        function resetSettings() {
+            if (confirm('設定をリセットしますか？')) {
+                localStorage.removeItem('settings');
+                location.reload();
+            }
+        }
+
+        function exportSettings() {
+            const data = JSON.stringify({ lanes, fps, greenNumber }, null, 2);
+            const blob = new Blob([data], { type: 'text/plain' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'iidx-visualizer-config.txt';
+            a.download = 'settings.txt';
             a.click();
             URL.revokeObjectURL(url);
-        });
+        }
 
-        // インポート
-        importInput.addEventListener('change', e => {
-            const file = e.target.files[0];
+        function importSettings() {
+            const file = document.getElementById('import').files[0];
             if (file) {
                 const reader = new FileReader();
-                reader.onload = event => {
-                    try {
-                        config = JSON.parse(event.target.result);
-                        drawLanes();
-                        greenNumberSlider.value = config.greenNumber;
-                        greenNumberInput.value = config.greenNumber;
-                        fpsToggle.textContent = `Switch to ${config.fps === 60 ? 30 : 60}fps`;
-                        frameTime = 1000 / config.fps;
-                        saveConfig();
-                    } catch (err) {
-                        alert('Invalid config file');
-                    }
+                reader.onload = e => {
+                    const settings = JSON.parse(e.target.result);
+                    Object.assign(lanes, settings.lanes);
+                    fps = settings.fps;
+                    greenNumber = settings.greenNumber;
+                    saveSettings();
+                    location.reload();
                 };
                 reader.readAsText(file);
             }
-        });
-
-        // リセット
-        resetBtn.addEventListener('click', () => {
-            if (confirm('Are you sure you want to reset to default?')) {
-                config = {
-                    laneColors: [
-                        '#000000', '#4a4a4a', '#000000', '#4a4a4a', '#000000', '#4a4a4a', '#000000',
-                        '#4a4a4a', '#000000', '#4a4a4a', '#000000', '#4a4a4a', '#000000', '#4a4a4a',
-                        '#ff0000', '#ff0000', '#ff0000', '#ff0000'
-                    ],
-                    buttonAssignments: [
-                        'LP', 'MP', 'HP', 'LK', 'MK', 'HK', 'P+K',
-                        'P', 'K', 'P+M', 'M+K', 'P+K', 'M', 'K',
-                        'SCR1', 'SCR2', 'SCR3', 'SCR4'
-                    ],
-                    greenNumber: 330,
-                    fps: 60
-                };
-                drawLanes();
-                greenNumberSlider.value = config.greenNumber;
-                greenNumberInput.value = config.greenNumber;
-                fpsToggle.textContent = 'Switch to 30fps';
-                frameTime = 1000 / 60;
-                saveConfig();
-            }
-        });
-
-        // アニメーションループ
-        function animate() {
-            drawNotes();
-            setTimeout(() => requestAnimationFrame(animate), frameTime);
         }
 
-        // 初期化
-        drawLanes();
-        animate();
+        window.addEventListener('gamepadconnected', init);
     </script>
 </body>
 </html>
