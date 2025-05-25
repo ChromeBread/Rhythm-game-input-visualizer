@@ -1,207 +1,86 @@
 let fps = 60;
-let greenNumber = 300;
-let noteDuration = (greenNumber * 0.016666) / 10; // 秒数
-let buttonAssignments = Array(18).fill().map((_, i) => i); // ボタン0-17をレーン0-17に
-let lastPressTimes = Array(18).fill(0);
-let activeNotes = Array(18).fill().map(() => []); // レーンごとのノーツリスト
-const lanes = document.querySelectorAll('.lane');
-const MAX_NOTES_PER_LANE = 10; // パフォーマンスのため最大ノーツ数制限
+let greenNumber = 300; // デフォルト緑数字
+let frameTime = 1000 / fps;
+let noteSpeed = (600 / (greenNumber * 0.016666 / 10)) / fps; // ピクセル/フレーム
+let buttonStates = {};
+let longNoteStarts = {};
+let buttonAssignments = Array(11).fill().map((_, i) => i); // デフォルト割り当て
+let settings = {
+    scratchColor: '#000000',
+    whiteKeyColor: '#808080',
+    blackKeyColor: '#000000',
+    scratchNoteColor: '#FF0000',
+    whiteNoteColor: '#FFFFFF',
+    blueNoteColor: '#00FFFF',
+    buttonLabels: ['SCR1', 'SCR2', 'KEY1', 'KEY2', 'KEY3', 'KEY4', 'KEY5', 'KEY6', 'KEY7', 'SCR3', 'SCR4'],
+    buttonAssignments: buttonAssignments.slice(),
+    greenNumber: 300,
+    fps: 60
+};
 
-// フレームレート設定
-function setFPS(value) {
-    fps = value;
-    document.querySelectorAll('#controls button').forEach(btn => {
-        btn.disabled = btn.textContent === `${value}fps`;
-    });
-    updateNoteSpeed();
-}
-
-// ノーツ速度更新
-function updateNoteSpeed() {
-    noteDuration = (greenNumber * 0.016666) / 10;
-    activeNotes.forEach((notes, laneIndex) => {
-        notes.forEach(note => {
-            note.style.transitionDuration = `${noteDuration}s`;
-            if (note.dataset.isMoving) {
-                note.style.top = '100%';
-            }
-        });
-    });
-}
-
-// 緑数字更新
-function updateGreenNumber(value) {
-    greenNumber = Math.max(100, Math.min(600, value));
-    document.getElementById('green-number').value = greenNumber;
-    document.getElementById('green-number-input').value = greenNumber;
-    updateNoteSpeed();
-    saveSettings();
-}
-
-// ボタン割り当てUI生成
-function initButtonAssignments() {
-    const container = document.getElementById('button-assignments');
-    container.innerHTML = '';
-    lanes.forEach((lane, i) => {
-        const label = lane.querySelector('.lane-label').value;
-        const div = document.createElement('div');
-        div.innerHTML = `<label>${label}:</label><input type="number" class="assignment-input" value="${buttonAssignments[i]}" min="0" max="255" data-lane="${i}">`;
-        container.appendChild(div);
-        div.querySelector('input').addEventListener('change', (e) => {
-            buttonAssignments[i] = parseInt(e.target.value);
-            saveSettings();
-        });
-    });
-}
-
-// ノーツ生成
-function createNote(laneIndex) {
-    if (activeNotes[laneIndex].length >= MAX_NOTES_PER_LANE) return; // 最大数制限
-    const lane = lanes[laneIndex];
-    const note = document.createElement('div');
-    note.className = 'note';
-    note.classList.add(
-        laneIndex < 2 || laneIndex >= 16 ? 'scratch' :
-        (laneIndex - 2) % 2 === 0 ? 'white' : 'blue'
-    );
-    note.style.transitionDuration = `${noteDuration}s`;
-    lane.appendChild(note);
-    activeNotes[laneIndex].push(note);
-    
-    // ノーツを即座に移動開始
-    note.dataset.isMoving = 'true';
-    setTimeout(() => {
-        note.style.top = '100%';
-        setTimeout(() => {
-            note.remove();
-            activeNotes[laneIndex] = activeNotes[laneIndex].filter(n => n !== note);
-        }, noteDuration * 1000);
-    }, 0);
-}
-
-// ロングノーツ開始
-function startLongNote(laneIndex) {
-    if (activeNotes[laneIndex].length >= MAX_NOTES_PER_LANE) return;
-    const lane = lanes[laneIndex];
-    const note = document.createElement('div');
-    note.className = 'note';
-    note.classList.add(
-        laneIndex < 2 || laneIndex >= 16 ? 'scratch' :
-        (laneIndex - 2) % 2 === 0 ? 'white' : 'blue'
-    );
-    note.style.transitionDuration = `${noteDuration}s`;
-    note.dataset.startTime = Date.now();
-    lane.appendChild(note);
-    activeNotes[laneIndex].push(note);
-    return note;
-}
-
-// ロングノーツ終了
-function endLongNote(laneIndex, note) {
-    const duration = (Date.now() - parseInt(note.dataset.startTime)) / 1000;
-    if (duration < 0.067) {
-        // ショートノーツとして処理
-        note.dataset.isMoving = 'true';
-        note.style.top = '100%';
-        setTimeout(() => {
-            note.remove();
-            activeNotes[laneIndex] = activeNotes[laneIndex].filter(n => n !== note);
-        }, noteDuration * 1000);
-    } else {
-        // ロングノーツ
-        const height = Math.min((duration / noteDuration) * 20, lane.clientHeight);
-        note.style.height = `${height}px`;
-        note.dataset.isMoving = 'true';
-        note.style.top = '100%';
-        setTimeout(() => {
-            note.remove();
-            activeNotes[laneIndex] = activeNotes[laneIndex].filter(n => n !== note);
-        }, noteDuration * 1000);
+// ローカルストレージから設定を読み込み
+function loadSettings() {
+    const saved = localStorage.getItem('iidx-visualizer-settings');
+    if (saved) {
+        settings = JSON.parse(saved);
+        applySettings();
     }
 }
 
-// Gamepad入力処理
-function handleGamepad() {
-    const gamepads = navigator.getGamepads();
-    gamepads.forEach((gamepad) => {
-        if (!gamepad) return;
-        gamepad.buttons.forEach((button, btnIndex) => {
-            const laneIndex = buttonAssignments.indexOf(btnIndex);
-            if (laneIndex === -1) return;
-            const now = Date.now();
-            if (button.pressed && lastPressTimes[laneIndex] === 0) {
-                lastPressTimes[laneIndex] = now;
-                const note = startLongNote(laneIndex);
-                activeNotes[laneIndex][activeNotes[laneIndex].length - 1] = note;
-            } else if (!button.pressed && lastPressTimes[laneIndex] !== 0) {
-                const note = activeNotes[laneIndex][activeNotes[laneIndex].length - 1];
-                if (note && !note.dataset.isMoving) {
-                    endLongNote(laneIndex, note);
-                }
-                lastPressTimes[laneIndex] = 0;
-            }
-        });
-    });
-    requestAnimationFrame(handleGamepad);
+// 設定を適用
+function applySettings() {
+    document.querySelectorAll('.scratch').forEach(lane => lane.style.backgroundColor = settings.scratchColor);
+    document.querySelectorAll('.white-key').forEach(lane => lane.style.backgroundColor = settings.whiteKeyColor);
+    document.querySelectorAll('.black-key').forEach(lane => lane.style.backgroundColor = settings.blackKeyColor);
+    document.querySelectorAll('.scratch .note').forEach(note => note.style.backgroundColor = settings.scratchNoteColor);
+    document.querySelectorAll('.white-key .note:nth-child(odd)').forEach(note => note.style.backgroundColor = settings.whiteNoteColor);
+    document.querySelectorAll('.white-key .note:nth-child(even)').forEach(note => note.style.backgroundColor = settings.blueNoteColor);
+    document.querySelectorAll('.black-key .note:nth-child(odd)').forEach(note => note.style.backgroundColor = settings.whiteNoteColor);
+    document.querySelectorAll('.black-key .note:nth-child(even)').forEach(note => note.style.backgroundColor = settings.blueNoteColor);
+    document.querySelectorAll('.button-input').forEach((input, i) => input.value = settings.buttonLabels[i]);
+    buttonAssignments = settings.buttonAssignments.slice();
+    greenNumber = settings.greenNumber;
+    fps = settings.fps;
+    frameTime = 1000 / fps;
+    noteSpeed = (600 / (greenNumber * 0.016666 / 10)) / fps;
+    document.getElementById('green-number').value = greenNumber;
+    document.getElementById('green-number-input').value = greenNumber;
+    document.getElementById('scratch-color').value = settings.scratchColor;
+    document.getElementById('white-key-color').value = settings.whiteKeyColor;
+    document.getElementById('black-key-color').value = settings.blackKeyColor;
+    document.getElementById('scratch-note-color').value = settings.scratchNoteColor;
+    document.getElementById('white-note-color').value = settings.whiteNoteColor;
+    document.getElementById('blue-note-color').value = settings.blueNoteColor;
 }
 
-// 設定保存
+// 設定を保存
 function saveSettings() {
-    const settings = {
-        fps,
-        greenNumber,
-        buttonAssignments,
-        scratchColor: document.getElementById('scratch-color').value,
-        whiteKeyColor: document.getElementById('white-key-color').value,
-        blackKeyColor: document.getElementById('black-key-color').value,
-        laneLabels: Array.from(document.querySelectorAll('.lane-label')).map(input => input.value)
-    };
     localStorage.setItem('iidx-visualizer-settings', JSON.stringify(settings));
 }
 
-// 設定読み込み
-function loadSettings() {
-    const settings = JSON.parse(localStorage.getItem('iidx-visualizer-settings'));
-    if (settings) {
-        setFPS(settings.fps);
-        updateGreenNumber(settings.greenNumber);
-        buttonAssignments = settings.buttonAssignments;
-        document.getElementById('scratch-color').value = settings.scratchColor;
-        document.getElementById('white-key-color').value = settings.whiteKeyColor;
-        document.getElementById('black-key-color').value = settings.blackKeyColor;
-        document.querySelectorAll('.lane-label').forEach((input, i) => {
-            input.value = settings.laneLabels[i] || (i < 2 ? `SCR${i + 1}` : i >= 16 ? `SCR${i - 13}` : `KEY${i - 1}`);
-        });
-        updateLaneColors();
-        initButtonAssignments();
-    }
+// FPS切り替え
+function setFPS(value) {
+    fps = value;
+    frameTime = 1000 / fps;
+    noteSpeed = (600 / (greenNumber * 0.016666 / 10)) / fps;
+    settings.fps = fps;
+    saveSettings();
 }
 
-// カラー更新
-function updateLaneColors() {
-    document.querySelectorAll('.scratch').forEach(lane => {
-        lane.style.backgroundColor = document.getElementById('scratch-color').value;
-    });
-    document.querySelectorAll('.key.white').forEach(lane => {
-        lane.style.backgroundColor = document.getElementById('white-key-color').value;
-    });
-    document.querySelectorAll('.key.black').forEach(lane => {
-        lane.style.backgroundColor = document.getElementById('black-key-color').value;
-    });
+// 緑数字変更
+function updateGreenNumber(value) {
+    greenNumber = value;
+    noteSpeed = (600 / (greenNumber * 0.016666 / 10)) / fps;
+    document.getElementById('green-number').value = greenNumber;
+    document.getElementById('green-number-input').value = greenNumber;
+    settings.greenNumber = greenNumber;
+    saveSettings();
 }
 
-// エクスポート
+// 設定エクスポート
 function exportSettings() {
-    const settings = {
-        fps,
-        greenNumber,
-        buttonAssignments,
-        scratchColor: document.getElementById('scratch-color').value,
-        whiteKeyColor: document.getElementById('white-key-color').value,
-        blackKeyColor: document.getElementById('black-key-color').value,
-        laneLabels: Array.from(document.querySelectorAll('.lane-label')).map(input => input.value)
-    };
-    const blob = new Blob([JSON.stringify(settings, null, 2)], { type: 'text/plain' });
+    const data = JSON.stringify(settings);
+    const blob = new Blob([data], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -210,75 +89,165 @@ function exportSettings() {
     URL.revokeObjectURL(url);
 }
 
-// インポート
-function importSettings() {
-    const fileInput = document.getElementById('import-file');
-    const file = fileInput.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-        try {
-            const settings = JSON.parse(reader.result);
-            setFPS(settings.fps);
-            updateGreenNumber(settings.greenNumber);
-            buttonAssignments = settings.buttonAssignments;
-            document.getElementById('scratch-color').value = settings.scratchColor;
-            document.getElementById('white-key-color').value = settings.whiteKeyColor;
-            document.getElementById('black-key-color').value = settings.blackKeyColor;
-            document.querySelectorAll('.lane-label').forEach((input, i) => {
-                input.value = settings.laneLabels[i] || (i < 2 ? `SCR${i + 1}` : i >= 16 ? `SCR${i - 13}` : `KEY${i - 1}`);
-            });
-            updateLaneColors();
-            initButtonAssignments();
-            saveSettings();
-        } catch (e) {
-            alert('インポートに失敗しました。ファイル形式を確認してください。');
-        }
-    };
-    reader.readAsText(file);
-}
+// 設定インポート
+document.getElementById('import-file').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                settings = JSON.parse(e.target.result);
+                applySettings();
+                saveSettings();
+            } catch (err) {
+                alert('Invalid settings file');
+            }
+        };
+        reader.readAsText(file);
+    }
+});
 
-// リセット
-function resetSettings() {
-    if (confirm('すべての設定をデフォルトにリセットしますか？')) {
-        setFPS(60);
-        updateGreenNumber(300);
-        buttonAssignments = Array(18).fill().map((_, i) => i);
-        document.getElementById('scratch-color').value = '#000000';
-        document.getElementById('white-key-color').value = '#808080';
-        document.getElementById('black-key-color').value = '#000000';
-        document.querySelectorAll('.lane-label').forEach((input, i) => {
-            input.value = i < 2 ? `SCR${i + 1}` : i >= 16 ? `SCR${i - 13}` : `KEY${i - 1}`;
-        });
-        updateLaneColors();
-        initButtonAssignments();
+// デフォルトリセット
+function confirmReset() {
+    if (confirm('Reset all settings to default?')) {
+        settings = {
+            scratchColor: '#000000',
+            whiteKeyColor: '#808080',
+            blackKeyColor: '#000000',
+            scratchNoteColor: '#FF0000',
+            whiteNoteColor: '#FFFFFF',
+            blueNoteColor: '#00FFFF',
+            buttonLabels: ['SCR1', 'SCR2', 'KEY1', 'KEY2', 'KEY3', 'KEY4', 'KEY5', 'KEY6', 'KEY7', 'SCR3', 'SCR4'],
+            buttonAssignments: Array(11).fill().map((_, i) => i),
+            greenNumber: 300,
+            fps: 60
+        };
+        applySettings();
         saveSettings();
     }
 }
 
-// イベントリスナー
-document.getElementById('green-number').addEventListener('input', (e) => updateGreenNumber(e.target.value));
-document.getElementById('green-number-input').addEventListener('input', (e) => updateGreenNumber(e.target.value));
-document.getElementById('scratch-color').addEventListener('change', () => {
-    updateLaneColors();
+// カラー変更
+document.getElementById('scratch-color').addEventListener('input', (e) => {
+    settings.scratchColor = e.target.value;
+    applySettings();
     saveSettings();
 });
-document.getElementById('white-key-color').addEventListener('change', () => {
-    updateLaneColors();
+document.getElementById('white-key-color').addEventListener('input', (e) => {
+    settings.whiteKeyColor = e.target.value;
+    applySettings();
     saveSettings();
 });
-document.getElementById('black-key-color').addEventListener('change', () => {
-    updateLaneColors();
+document.getElementById('black-key-color').addEventListener('input', (e) => {
+    settings.blackKeyColor = e.target.value;
+    applySettings();
     saveSettings();
 });
-document.querySelectorAll('.lane-label').forEach(input => {
-    input.addEventListener('change', () => {
-        initButtonAssignments();
+document.getElementById('scratch-note-color').addEventListener('input', (e) => {
+    settings.scratchNoteColor = e.target.value;
+    applySettings();
+    saveSettings();
+});
+document.getElementById('white-note-color').addEventListener('input', (e) => {
+    settings.whiteNoteColor = e.target.value;
+    applySettings();
+    saveSettings();
+});
+document.getElementById('blue-note-color').addEventListener('input', (e) => {
+    settings.blueNoteColor = e.target.value;
+    applySettings();
+    saveSettings();
+});
+
+// ボタンラベル変更
+document.querySelectorAll('.button-input').forEach((input, i) => {
+    input.addEventListener('input', () => {
+        settings.buttonLabels[i] = input.value;
         saveSettings();
     });
 });
 
+// 緑数字スライダーと入力
+document.getElementById('green-number').addEventListener('input', (e) => {
+    updateGreenNumber(parseInt(e.target.value));
+});
+document.getElementById('green-number-input').addEventListener('input', (e) => {
+    updateGreenNumber(parseInt(e.target.value));
+});
+
+// ゲームパッド入力処理
+function handleGamepad() {
+    const gamepads = navigator.getGamepads();
+    for (let i = 0; i < gamepads.length; i++) {
+        const gamepad = gamepads[i];
+        if (!gamepad) continue;
+
+        gamepad.buttons.forEach((button, btnIndex) => {
+            const laneIndex = buttonAssignments.indexOf(btnIndex);
+            if (laneIndex === -1) return;
+
+            const lane = document.querySelector(`.lane[data-lane="${laneIndex}"] .note-area`);
+            const now = performance.now();
+
+            if (button.pressed && !buttonStates[btnIndex]) {
+                // ボタン押下開始
+                buttonStates[btnIndex] = now;
+                longNoteStarts[btnIndex] = now;
+                const note = document.createElement('div');
+                note.className = 'note';
+                note.style.height = '10px';
+                note.dataset.start = now;
+                lane.appendChild(note);
+            } else if (button.pressed && buttonStates[btnIndex]) {
+                // ロングノーツ処理
+                const duration = now - buttonStates[btnIndex];
+                if (duration >= 67) { // 0.067秒以上
+                    const note = lane.querySelector(`.note[data-start="${buttonStates[btnIndex]}"]`);
+                    if (note) {
+                        note.style.height = `${Math.max(10, (duration / 1000) * noteSpeed * fps)}px`;
+                    }
+                }
+            } else if (!button.pressed && buttonStates[btnIndex]) {
+                // ボタン離された
+                const note = lane.querySelector(`.note[data-start="${buttonStates[btnIndex]}"]`);
+                if (note) {
+                    note.dataset.fixed = true;
+                }
+                delete buttonStates[btnIndex];
+                delete longNoteStarts[btnIndex];
+            }
+        });
+    }
+}
+
+// ノーツアニメーション
+function animateNotes() {
+    const now = performance.now();
+    document.querySelectorAll('.note').forEach(note => {
+        if (note.dataset.fixed) {
+            let top = parseFloat(note.style.top) || 0;
+            top += noteSpeed;
+            note.style.top = `${top}px`;
+            if (top > 600 shorts) {
+                note.remove();
+            }
+        }
+    });
+}
+
+// メインループ
+function gameLoop() {
+    handleGamepad();
+    animateNotes();
+    requestAnimationFrame(gameLoop);
+}
+
 // 初期化
-initButtonAssignments();
-loadSettings();
-requestAnimationFrame(handleGamepad);
+window.addEventListener('gamepadconnected', () => {
+    console.log('Gamepad connected');
+    gameLoop();
+});
+
+window.addEventListener('load', () => {
+    loadSettings();
+});
