@@ -3,39 +3,49 @@
 <head>
     <meta charset="UTF-8">
     <title>Beatmania IIDX Joystick Visualizer</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div id="game-container" style="background-color: #00FF00;">
-        <!-- レーン表示 -->
+    <div id="container">
         <div id="lanes">
             <!-- スクラッチ2レーン、鍵盤7レーン、鍵盤7レーン、スクラッチ2レーン -->
-            <div class="lane scratch" data-index="0"><input type="text" class="lane-label" value="SCR1"></div>
-            <div class="lane key white" data-index="1"><input type="text" class="lane-label" value="KEY1"></div>
-            <div class="lane key black" data-index="2"><input type="text" class="lane-label" value="KEY2"></div>
-            <!-- 以下、残りのレーンを同様に追加 -->
+            <div class="lane scratch" data-lane="0"><input type="text" class="lane-label" value="SCR1"></div>
+            <div class="lane key white" data-lane="1"><input type="text" class="lane-label" value="Key1"></div>
+            <div class="lane key black" data-lane="2"><input type="text" class="lane-label" value="Key2"></div>
+            <div class="lane key white" data-lane="3"><input type="text" class="lane-label" value="Key3"></div>
+            <div class="lane key black" data-lane="4"><input type="text" class="lane-label" value="Key4"></div>
+            <div class="lane key white" data-lane="5"><input type="text" class="lane-label" value="Key5"></div>
+            <div class="lane key black" data-lane="6"><input type="text" class="lane-label" value="Key6"></div>
+            <div class="lane key white" data-lane="7"><input type="text" class="lane-label" value="Key7"></div>
+            <div class="lane key black" data-lane="8"><input type="text" class="lane-label" value="Key8"></div>
+            <div class="lane key white" data-lane="9"><input type="text" class="lane-label" value="Key9"></div>
+            <div class="lane key black" data-lane="10"><input type="text" class="lane-label" value="Key10"></div>
+            <div class="lane key white" data-lane="11"><input type="text" class="lane-label" value="Key11"></div>
+            <div class="lane key black" data-lane="12"><input type="text" class="lane-label" value="Key12"></div>
+            <div class="lane key white" data-lane="13"><input type="text" class="lane-label" value="Key13"></div>
+            <div class="lane scratch" data-lane="14"><input type="text" class="lane-label" value="SCR2"></div>
         </div>
-        <!-- 設定パネル -->
         <div id="settings">
+            <h2>Settings</h2>
+            <label>Green Number: <input type="number" id="green-number" value="300" min="100" max="1000"></label>
+            <input type="range" id="green-slider" min="100" max="1000" value="300">
             <label>FPS: 
                 <button onclick="setFPS(30)">30 FPS</button>
                 <button onclick="setFPS(60)">60 FPS</button>
             </label>
-            <label>緑数字: 
-                <input type="range" id="greenNumber" min="50" max="500" value="300">
-                <input type="number" id="greenNumberInput" value="300">
-            </label>
-            <label>レーンカラー:
-                <input type="color" id="scratchColor" value="#000000">
-                <input type="color" id="whiteKeyColor" value="#808080">
-                <input type="color" id="blackKeyColor" value="#000000">
-            </label>
-            <button onclick="exportSettings()">エクスポート</button>
-            <input type="file" id="importFile" accept=".txt">
-            <button onclick="resetSettings()">リセット</button>
+            <label>Long Notes: <input type="checkbox" id="long-notes" checked></label>
+            <label>Scratch Color: <input type="color" id="scratch-color" value="#000000"></label>
+            <label>White Key Color: <input type="color" id="white-key-color" value="#808080"></label>
+            <label>Black Key Color: <input type="color" id="black-key-color" value="#000000"></label>
+            <label>Button Assignments:</label>
+            <div id="button-assignments">
+                <!-- 動的に生成 -->
+            </div>
+            <button onclick="exportConfig()">Export Config</button>
+            <input type="file" id="import-config" accept=".txt">
+            <button onclick="resetConfig()">Reset to Default</button>
         </div>
     </div>
-    <canvas id="noteCanvas"></canvas>
     <script src="script.js"></script>
 </body>
 </html>
