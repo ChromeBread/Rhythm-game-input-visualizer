@@ -2,126 +2,183 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>Beatmania IIDX風 ジョイスティック入力可視化</title>
+    <title>IIDX Style Joystick Visualizer</title>
     <style>
-        body {
-            margin: 0;
-            overflow: hidden;
-            background: black;
-            color: white;
-            font-family: Arial, sans-serif;
-        }
-        canvas {
-            display: block;
-        }
-        #fpsText {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            font-size: 24px;
-        }
-        #noteTimeText {
-            position: absolute;
-            bottom: 30px;
-            left: 50px;
-            font-size: 24px;
-            color: #00ff00;
-        }
-        #greenNumberInput {
-            position: absolute;
-            bottom: 30px;
-            left: 260px;
-            width: 60px;
-            font-size: 18px;
-            background: #333;
-            color: white;
-            border: 1px solid #646464;
-        }
+        body { margin: 0; background: #000; color: #fff; font-family: Arial; }
+        #canvas { display: block; }
+        #controls { position: absolute; top: 10px; left: 10px; }
+        .lane { position: absolute; border: 1px solid #333; }
+        .note { position: absolute; background: #fff; border: 1px solid #000; }
+        .long-note { background: linear-gradient(to bottom, #fff, #aaa); }
+        button { margin: 5px; padding: 5px 10px; }
+        input[type="range"], input[type="number"] { margin: 5px; }
     </style>
 </head>
 <body>
     <canvas id="canvas"></canvas>
-    <div id="fpsText">FPS: 60</div>
-    <div id="noteTimeText">Green: 330 (0.55s)</div>
-    <input type="number" id="greenNumberInput" value="330" min="100" max="600">
+    <div id="controls">
+        <button onclick="setFps(30)">30 FPS</button>
+        <button onclick="setFps(60)">60 FPS</button>
+        <div>
+            <label>緑数字: <input type="number" id="greenNumber" value="330" min="100" max="600" step="10"></label>
+            <input type="range" id="greenSlider" value="330" min="100" max="600" step="10">
+        </div>
+    </div>
     <script>
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
-        canvas.width = 800;
-        canvas.height = 600;
+        canvas.width = 1280;
+        canvas.height = 720;
 
-        // 定数
-        const NUM_LANES = 7;
-        const LANE_WIDTH = canvas.width / NUM_LANES;
-        const LANE_HEIGHT = canvas.height - 100;
-        const JUDGE_LINE_Y = canvas.height - 100;
-        const NOTE_HEIGHT = 20;
-        const LANE_COLORS = [
-            '#ff0000', '#00ff00', '#0000ff', '#ffff00',
-            '#ff00ff', '#00ffff', '#800080'
+        // レーン設定
+        const lanes = [
+            { x: 100, color: '#FFFFFF' }, // 1鍵（白）
+            { x: 150, color: '#00A1D6' }, // 2鍵（青）
+            { x: 200, color: '#FFFFFF' }, // 3鍵（白）
+            { x: 250, color: '#00A1D6' }, // 4鍵（青）
+            { x: 300, color: '#FFFFFF' }, // 5鍵（白）
+            { x: 350, color: '#00A1D6' }, // 6鍵（青）
+            { x: 400, color: '#FFFFFF' }, // 7鍵（白）
+            { x: 450, color: '#FF0000' }, // スクラッチ（赤）
+            { x: 550, color: '#FFFFFF' }, // 8鍵（白）
+            { x: 600, color: '#00A1D6' }, // 9鍵（青）
+            { x: 650, color: '#FFFFFF' }, // 10鍵（白）
+            { x: 700, color: '#00A1D6' }, // 11鍵（青）
+            { x: 750, color: '#FFFFFF' }, // 12鍵（白）
+            { x: 800, color: '#00A1D6' }, // 13鍵（青）
         ];
-        const NOTE_COLOR = '#ffffff';
-        const JUDGE_LINE_COLOR = '#ffffff';
+        const laneWidth = 40;
+        const laneHeight = canvas.height - 100;
+        const noteHeight = 20;
 
-        // 状態
+        // ボタン割り当て（ジョイスティックのボタンインデックス）
+        const buttonToLane = {
+            0: 0,  // ボタン0 → レーン1
+            1: 1,  // ボタン1 → レーン2
+            2: 2,  // ボタン2 → レーン3
+            3: 3,  // ボタン3 → レーン4
+            4: 4,  // ボタン4 → レーン5
+            5: 5,  // ボタン5 → レーン6
+            6: 6,  // ボタン6 → レーン7
+            7: 7,  // ボタン7 → スクラッチ
+            8: 8,  // ボタン8 → レーン8
+            9: 9,  // ボタン9 → レーン9
+            10: 10, // ボタン10 → レーン10
+            11: 11, // ボタン11 → レーン11
+            12: 12, // ボタン12 → レーン12
+            13: 13  // ボタン13 → レーン13
+        };
+
         let fps = 60;
-        let noteSpeed = 300; // ピクセル/秒
-        let greenNumber = 330; // 初期緑数字
-        let noteTime = greenNumber * 0.01666 / 10; // 秒数
-        let notes = Array(NUM_LANES).fill().map(() => []);
-        let lastFrameTime = performance.now();
+        let frameTime = 1000 / fps;
+        let greenNumber = 330;
+        let noteSpeed = (greenNumber * 0.016666 / 10) * fps; // フレームごとの移動距離
+        let notes = [];
         let buttonStates = {};
+        let pressStartTimes = {};
 
-        // ボタン割り当て（Gamepadボタン0～6をレーン0～6に）
-        const buttonToLane = { 0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6 };
+        // 緑数字変更
+        const greenNumberInput = document.getElementById('greenNumber');
+        const greenSlider = document.getElementById('greenSlider');
+        greenNumberInput.addEventListener('input', () => {
+            greenSlider.value = greenNumberInput.value;
+            greenNumber = parseInt(greenNumberInput.value);
+            noteSpeed = (greenNumber * 0.016666 / 10) * fps;
+        });
+        greenSlider.addEventListener('input', () => {
+            greenNumberInput.value = greenSlider.value;
+            greenNumber = parseInt(greenSlider.value);
+            noteSpeed = (greenNumber * 0.016666 / 10) * fps;
+        });
 
-        // ノーツ速度更新
-        function updateNoteSpeed() {
-            noteTime = greenNumber * 0.01666 / 10; // 秒数 = 緑数字 × 0.01666 / 10
-            noteSpeed = LANE_HEIGHT / noteTime; // ピクセル/秒
-            document.getElementById('noteTimeText').textContent = `Green: ${greenNumber} (${noteTime.toFixed(2)}s)`;
+        // FPS切り替え
+        function setFps(newFps) {
+            fps = newFps;
+            frameTime = 1000 / fps;
+            noteSpeed = (greenNumber * 0.016666 / 10) * fps;
         }
 
-        // レーン描画
-        function drawLanes() {
-            for (let i = 0; i < NUM_LANES; i++) {
-                ctx.fillStyle = LANE_COLORS[i];
-                ctx.fillRect(i * LANE_WIDTH, 0, LANE_WIDTH, LANE_HEIGHT);
-                ctx.strokeStyle = '#646464';
-                ctx.lineWidth = 2;
-                ctx.strokeRect(i * LANE_WIDTH, 0, LANE_WIDTH, LANE_HEIGHT);
+        // ノーツ管理
+        class Note {
+            constructor(lane, isLong = false, startTime = Date.now()) {
+                this.lane = lane;
+                this.y = 0;
+                this.isLong = isLong;
+                this.startTime = startTime;
+                this.endTime = isLong ? null : startTime;
             }
-        }
-
-        // 判定ライン描画
-        function drawJudgeLine() {
-            ctx.strokeStyle = JUDGE_LINE_COLOR;
-            ctx.lineWidth = 5;
-            ctx.beginPath();
-            ctx.moveTo(0, JUDGE_LINE_Y);
-            ctx.lineTo(canvas.width, JUDGE_LINE_Y);
-            ctx.stroke();
-        }
-
-        // ノーツ描画
-        function drawNotes(deltaTime) {
-            for (let lane = 0; lane < NUM_LANES; lane++) {
-                for (let i = notes[lane].length - 1; i >= 0; i--) {
-                    let note = notes[lane][i];
-                    note[1] += noteSpeed * (deltaTime / 1000);
-                    if (note[1] > canvas.height) {
-                        notes[lane].splice(i, 1);
-                        continue;
-                    }
-                    ctx.fillStyle = NOTE_COLOR;
-                    ctx.fillRect(lane * LANE_WIDTH + 10, note[1], LANE_WIDTH - 20, NOTE_HEIGHT);
+            update() {
+                this.y += noteSpeed;
+                if (this.y > canvas.height) return false;
+                return true;
+            }
+            draw() {
+                ctx.fillStyle = lanes[this.lane].color;
+                if (this.isLong && !this.endTime) {
+                    ctx.fillRect(lanes[this.lane].x, this.y, laneWidth, canvas.height - this.y);
+                } else {
+                    ctx.fillRect(lanes[this.lane].x, this.y, laneWidth, noteHeight);
                 }
             }
         }
 
-        // ゲームパッド入力処理
-        function checkGamepad() {
+        // ゲームパッド入力
+        function handleGamepad() {
             const gamepads = navigator.getGamepads();
             for (let gamepad of gamepads) {
                 if (!gamepad) continue;
-                gamepad.buttons.forEach((
+                gamepad.buttons.forEach((button, index) => {
+                    if (button.pressed && !buttonStates[index]) {
+                        buttonStates[index] = true;
+                        pressStartTimes[index] = Date.now();
+                        if (buttonToLane[index] !== undefined) {
+                            notes.push(new Note(buttonToLane[index]));
+                        }
+                    } else if (!button.pressed && buttonStates[index]) {
+                        buttonStates[index] = false;
+                        const pressDuration = (Date.now() - pressStartTimes[index]) / 1000;
+                        if (pressDuration >= 0.067 && buttonToLane[index] !== undefined) {
+                            const note = notes.find(n => n.lane === buttonToLane[index] && !n.endTime);
+                            if (note) note.isLong = true;
+                        }
+                        notes.forEach(n => {
+                            if (n.lane === buttonToLane[index] && !n.endTime) {
+                                n.endTime = Date.now();
+                            }
+                        });
+                    }
+                });
+            }
+        }
+
+        // 描画ループ
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // レーン描画
+            lanes.forEach(lane => {
+                ctx.fillStyle = lane.color;
+                ctx.fillRect(lane.x, 0, laneWidth, laneHeight);
+            });
+
+            // ノーツ更新と描画
+            notes = notes.filter(note => note.update());
+            notes.forEach(note => note.draw());
+
+            // ゲームパッド処理
+            handleGamepad();
+
+            setTimeout(animate, frameTime);
+        }
+
+        // ゲームパッド接続検知
+        window.addEventListener('gamepadconnected', (e) => {
+            console.log('Gamepad connected:', e.gamepad);
+            animate();
+        });
+
+        // 初期描画
+        animate();
+    </script>
+</body>
+</html>
