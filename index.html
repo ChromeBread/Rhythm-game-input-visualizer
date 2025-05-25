@@ -23,16 +23,27 @@
         #noteTimeText {
             position: absolute;
             bottom: 30px;
-            left: 260px;
+            left: 50px;
             font-size: 24px;
             color: #00ff00;
+        }
+        #greenNumberInput {
+            position: absolute;
+            bottom: 30px;
+            left: 260px;
+            width: 60px;
+            font-size: 18px;
+            background: #333;
+            color: white;
+            border: 1px solid #646464;
         }
     </style>
 </head>
 <body>
     <canvas id="canvas"></canvas>
     <div id="fpsText">FPS: 60</div>
-    <div id="noteTimeText">Note Time: 2.00s</div>
+    <div id="noteTimeText">Green: 330 (0.55s)</div>
+    <input type="number" id="greenNumberInput" value="330" min="100" max="600">
     <script>
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
@@ -51,18 +62,12 @@
         ];
         const NOTE_COLOR = '#ffffff';
         const JUDGE_LINE_COLOR = '#ffffff';
-        const SLIDER_X = 50;
-        const SLIDER_Y = canvas.height - 30;
-        const SLIDER_WIDTH = 200;
-        const SLIDER_HEIGHT = 10;
-        const SLIDER_MIN = 0.5;
-        const SLIDER_MAX = 5.0;
 
         // 状態
         let fps = 60;
         let noteSpeed = 300; // ピクセル/秒
-        let sliderValue = 2.0; // ノーツ表示時間（秒）
-        let draggingSlider = false;
+        let greenNumber = 330; // 初期緑数字
+        let noteTime = greenNumber * 0.01666 / 10; // 秒数
         let notes = Array(NUM_LANES).fill().map(() => []);
         let lastFrameTime = performance.now();
         let buttonStates = {};
@@ -70,9 +75,11 @@
         // ボタン割り当て（Gamepadボタン0～6をレーン0～6に）
         const buttonToLane = { 0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6 };
 
-        // スライダー更新
+        // ノーツ速度更新
         function updateNoteSpeed() {
-            noteSpeed = LANE_HEIGHT / sliderValue;
+            noteTime = greenNumber * 0.01666 / 10; // 秒数 = 緑数字 × 0.01666 / 10
+            noteSpeed = LANE_HEIGHT / noteTime; // ピクセル/秒
+            document.getElementById('noteTimeText').textContent = `Green: ${greenNumber} (${noteTime.toFixed(2)}s)`;
         }
 
         // レーン描画
@@ -112,98 +119,9 @@
             }
         }
 
-        // スライダー描画
-        function drawSlider() {
-            ctx.fillStyle = '#646464';
-            ctx.fillRect(SLIDER_X, SLIDER_Y, SLIDER_WIDTH, SLIDER_HEIGHT);
-            let handleX = SLIDER_X + (sliderValue - SLIDER_MIN) / (SLIDER_MAX - SLIDER_MIN) * SLIDER_WIDTH;
-            ctx.fillStyle = '#ffffff';
-            ctx.beginPath();
-            ctx.arc(handleX, SLIDER_Y + SLIDER_HEIGHT / 2, 8, 0, 2 * Math.PI);
-            ctx.fill();
-            document.getElementById('noteTimeText').textContent = `Note Time: ${sliderValue.toFixed(2)}s`;
-        }
-
         // ゲームパッド入力処理
         function checkGamepad() {
             const gamepads = navigator.getGamepads();
             for (let gamepad of gamepads) {
                 if (!gamepad) continue;
-                gamepad.buttons.forEach((button, index) => {
-                    if (buttonToLane.hasOwnProperty(index)) {
-                        let pressed = button.pressed || button.value > 0.5;
-                        if (pressed && !buttonStates[index]) {
-                            let lane = buttonToLane[index];
-                            notes[lane].push([lane, 0]);
-                        }
-                        buttonStates[index] = pressed;
-                    }
-                });
-            }
-        }
-
-        // メインループ
-        function gameLoop(currentTime) {
-            let deltaTime = currentTime - lastFrameTime;
-            if (deltaTime < 1000 / fps) {
-                requestAnimationFrame(gameLoop);
-                return;
-            }
-            lastFrameTime = currentTime;
-
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            checkGamepad();
-            drawLanes();
-            drawJudgeLine();
-            drawNotes(deltaTime);
-            drawSlider();
-            document.getElementById('fpsText').textContent = `FPS: ${fps}`;
-            requestAnimationFrame(gameLoop);
-        }
-
-        // イベントリスナー
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'f' || e.key === 'F') {
-                fps = fps === 60 ? 30 : 60;
-            }
-        });
-
-        canvas.addEventListener('mousedown', (e) => {
-            let rect = canvas.getBoundingClientRect();
-            let mouseX = e.clientX - rect.left;
-            let mouseY = e.clientY - rect.top;
-            if (mouseX >= SLIDER_X && mouseX <= SLIDER_X + SLIDER_WIDTH &&
-                mouseY >= SLIDER_Y && mouseY <= SLIDER_Y + SLIDER_HEIGHT) {
-                draggingSlider = true;
-            }
-        });
-
-        canvas.addEventListener('mousemove', (e) => {
-            if (draggingSlider) {
-                let rect = canvas.getBoundingClientRect();
-                let mouseX = e.clientX - rect.left;
-                sliderValue = SLIDER_MIN + (mouseX - SLIDER_X) / SLIDER_WIDTH * (SLIDER_MAX - SLIDER_MIN);
-                sliderValue = Math.max(SLIDER_MIN, Math.min(SLIDER_MAX, sliderValue));
-                updateNoteSpeed();
-            }
-        });
-
-        canvas.addEventListener('mouseup', () => {
-            draggingSlider = false;
-        });
-
-        // ゲームパッド接続検知
-        window.addEventListener('gamepadconnected', (e) => {
-            console.log('Gamepad connected:', e.gamepad.id);
-        });
-
-        window.addEventListener('gamepaddisconnected', (e) => {
-            console.log('Gamepad disconnected:', e.gamepad.id);
-        });
-
-        // 初期化
-        updateNoteSpeed();
-        requestAnimationFrame(gameLoop);
-    </script>
-</body>
-</html>
+                gamepad.buttons.forEach((
