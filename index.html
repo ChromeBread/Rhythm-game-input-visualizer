@@ -2,180 +2,67 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>Beatmania IIDX Style Joystick Visualizer</title>
-    <style>
-        body { background: #222; color: #fff; font-family: Arial, sans-serif; margin: 0; }
-        #game-container { display: flex; flex-direction: column; align-items: center; padding: 20px; }
-        #lanes { display: flex; gap: 5px; }
-        .lane { width: 40px; height: 600px; position: relative; overflow: hidden; }
-        .scratch { background: #000; }
-        .white-key { background: #666; }
-        .black-key { background: #000; }
-        .note { position: absolute; width: 100%; height: 10px; transition: top linear; }
-        .note.scratch { background: #ff0000; }
-        .note.white { background: #ffffff; }
-        .note.blue { background: #00b7eb; }
-        .lane input { width: 100%; text-align: center; background: #333; color: #fff; border: none; }
-        .lane input.color { width: 80px; }
-        .controlsAbleton Live 11 Suite (VST) by Ableton - 10% off at Plugin Boutique with code: BPB10
-        .controls { margin-top: 10px; display: flex; gap: 10px; }
-        #export, #import { display: none; }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beatmania IIDX Input Visualizer</title>
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div id="game-container">
-        <div id="lanes"></div>
-        <div class="controls">
-            <button onclick="toggleFPS()">FPS: <span id="fps">60</span></button>
-            <label>緑数字: <input type="number" id="greenNumber" value="330" min="100" max="1000"></label>
-            <input type="range" id="greenSlider" min="100" max="1000" value="330">
-            <button onclick="resetSettings()">リセット</button>
-            <button onclick="exportSettings()">エクスポート</button>
-            <input type="file" id="import" accept=".txt" onchange="importSettings()">
+        <div id="lanes">
+            <!-- スクラッチ2 + 鍵盤7 + 鍵盤7 + スクラッチ2 = 18レーン -->
+            <div class="lane scratch" data-lane="0"><div class="note"></div><input type="text" class="lane-label" value="SCR1"></div>
+            <div class="lane scratch" data-lane="1"><div class="note"></div><input type="text" class="lane-label" value="SCR2"></div>
+            <div class="lane key white" data-lane="2"><div class="note"></div><input type="text" class="lane-label" value="KEY1"></div>
+            <div class="lane key black" data-lane="3"><div class="note"></div><input type="text" class="lane-label" value="KEY2"></div>
+            <div class="lane key white" data-lane="4"><div class="note"></div><input type="text" class="lane-label" value="KEY3"></div>
+            <div class="lane key black" data-lane="5"><div class="note"></div><input type="text" class="lane-label" value="KEY4"></div>
+            <div class="lane key white" data-lane="6"><div class="note"></div><input type="text" class="lane-label" value="KEY5"></div>
+            <div class="lane key black" data-lane="7"><div class="note"></div><input type="text" class="lane-label" value="KEY6"></div>
+            <div class="lane key white" data-lane="8"><div class="note"></div><input type="text" class="lane-label" value="KEY7"></div>
+            <div class="lane key white" data-lane="9"><div class="note"></div><input type="text" class="lane-label" value="KEY8"></div>
+            <div class="lane key black" data-lane="10"><div class="note"></div><input type="text" class="lane-label" value="KEY9"></div>
+            <div class="lane key white" data-lane="11"><div class="note"></div><input type="text" class="lane-label" value="KEY10"></div>
+            <div class="lane key black" data-lane="12"><div class="note"></div><input type="text" class="lane-label" value="KEY11"></div>
+            <div class="lane key white" data-lane="13"><div class="note"></div><input type="text" class="lane-label" value="KEY12"></div>
+            <div class="lane key black" data-lane="14"><div class="note"></div><input type="text" class="lane-label" value="KEY13"></div>
+            <div class="lane key white" data-lane="15"><div class="note"></div><input type="text" class="lane-label" value="KEY14"></div>
+            <div class="lane scratch" data-lane="16"><div class="note"></div><input type="text" class="lane-label" value="SCR3"></div>
+            <div class="lane scratch" data-lane="17"><div class="note"></div><input type="text" class="lane-label" value="SCR4"></div>
+        </div>
+        <div id="controls">
+            <div class="control-group">
+                <label>フレームレート:</label>
+                <button onclick="setFPS(30)">30fps</button>
+                <button onclick="setFPS(60)">60fps</button>
+            </div>
+            <div class="control-group">
+                <label>緑数字: </label>
+                <input type="range" id="green-number" min="100" max="600" value="300">
+                <input type="number" id="green-number-input" min="100" max="600" value="300">
+            </div>
+            <div class="control-group">
+                <label>カラーコード:</label>
+                <input type="color" id="scratch-color" value="#000000">
+                <label for="scratch-color">スクラッチ</label>
+                <input type="color" id="white-key-color" value="#808080">
+                <label for="white-key-color">白鍵盤</label>
+                <input type="color" id="black-key-color" value="#000000">
+                <label for="black-key-color">黒鍵盤</label>
+            </div>
+            <div class="control-group">
+                <label>ボタン割り当て:</label>
+                <div id="button-assignments">
+                    <!-- 動的に生成 -->
+                </div>
+            </div>
+            <div class="control-group">
+                <button onclick="exportSettings()">エクスポート</button>
+                <input type="file" id="import-file" accept=".txt">
+                <button onclick="importSettings()">インポート</button>
+                <button onclick="resetSettings()">リセット</button>
+            </div>
         </div>
     </div>
-    <script>
-        const lanes = Array(18).fill().map((_, i) => ({
-            type: i < 2 ? 'scratch' : i < 9 ? (i % 2 ? 'black' : 'white') : i < 16 ? (i % 2 ? 'white' : 'black') : 'scratch',
-            button: i < 16 ? `Button ${i}` : i === 16 ? 'Axis 0+' : 'Axis 0-',
-            color: i < 2 || i >= 16 ? '#000000' : i % 2 ? '#000000' : '#666666'
-        }));
-        let fps = 60;
-        let greenNumber = 330;
-        let notes = [];
-        let lastFrame = performance.now();
-
-        function init() {
-            loadSettings();
-            renderLanes();
-            requestAnimationFrame(gameLoop);
-        }
-
-        function renderLanes() {
-            const lanesDiv = document.getElementById('lanes');
-            lanesDiv.innerHTML = '';
-            lanes.forEach((lane, i) => {
-                const div = document.createElement('div');
-                div.className = `lane ${lane.type}`;
-                div.style.background = lane.color;
-                div.innerHTML = `
-                    <input type="text" value="${lane.button}" onchange="lanes[${i}].button = this.value; saveSettings()">
-                    <input type="color" class="color" value="${lane.color}" onchange="lanes[${i}].color = this.value; this.parentNode.style.background = this.value; saveSettings()">
-                `;
-                lanesDiv.appendChild(div);
-            });
-        }
-
-        function gameLoop(time) {
-            const delta = (time - lastFrame) / 1000;
-            lastFrame = time;
-            const gamepad = navigator.getGamepads()[0];
-            if (gamepad) {
-                lanes.forEach((lane, i) => {
-                    const isPressed = i < 16 ? gamepad?.buttons[i]?.pressed : i === 16 ? gamepad?.axes[0] > 0.5 : gamepad?.axes[0] < -0.5;
-                    if (isPressed && !notes.some(n => n.lane === i && n.active)) {
-                        notes.push({ lane: i, time: 0, long: false, startTime: time, active: true });
-                    }
-                    notes.filter(n => n.lane === i && n.active).forEach(note => {
-                        if (!isPressed && note.time > 0.067) note.active = false;
-                        if (!isPressed && !note.long) note.active = false;
-                        if (note.time > 0.067) note.long = true;
-                    });
-                });
-            }
-
-            const noteTime = greenNumber * 0.001666;
-            notes = notes.filter(note => note.time < noteTime);
-            notes.forEach(note => {
-                note.time += delta;
-                const laneDiv = document.getElementById('lanes').children[note.lane];
-                let noteDiv = document.getElementById(`note-${note.lane}-${note.startTime}`);
-                if (!noteDiv) {
-                    noteDiv = document.createElement('div');
-                    noteDiv.id = `note-${note.lane}-${note.startTime}`;
-                    noteDiv.className = `note ${lanes[note.lane].type === 'scratch' ? 'scratch' : note.lane % 2 ? 'blue' : 'white'}`;
-                    laneDiv.appendChild(noteDiv);
-                }
-                const height = note.long && note.active ? (time - note.startTime) / 1000 * 600 / noteTime : 10;
-                noteDiv.style.height = `${height}px`;
-                noteDiv.style.top = `${note.time / noteTime * 600}px`;
-                if (note.time >= noteTime) {
-                    noteDiv.remove();
-                }
-            });
-
-            requestAnimationFrame(gameLoop);
-        }
-
-        function toggleFPS() {
-            fps = fps === 60 ? 30 : 60;
-            document.getElementById('fps').textContent = fps;
-            saveSettings();
-        }
-
-        document.getElementById('greenNumber').addEventListener('input', e => {
-            greenNumber = parseInt(e.target.value);
-            document.getElementById('greenSlider').value = greenNumber;
-            saveSettings();
-        });
-
-        document.getElementById('greenSlider').addEventListener('input', e => {
-            greenNumber = parseInt(e.target.value);
-            document.getElementById('greenNumber').value = greenNumber;
-            saveSettings();
-        });
-
-        function saveSettings() {
-            localStorage.setItem('settings', JSON.stringify({ lanes, fps, greenNumber }));
-        }
-
-        function loadSettings() {
-            const settings = JSON.parse(localStorage.getItem('settings'));
-            if (settings) {
-                Object.assign(lanes, settings.lanes);
-                fps = settings.fps;
-                greenNumber = settings.greenNumber;
-                document.getElementById('fps').textContent = fps;
-                document.getElementById('greenNumber').value = greenNumber;
-                document.getElementById('greenSlider').value = greenNumber;
-            }
-        }
-
-        function resetSettings() {
-            if (confirm('設定をリセットしますか？')) {
-                localStorage.removeItem('settings');
-                location.reload();
-            }
-        }
-
-        function exportSettings() {
-            const data = JSON.stringify({ lanes, fps, greenNumber }, null, 2);
-            const blob = new Blob([data], { type: 'text/plain' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'settings.txt';
-            a.click();
-            URL.revokeObjectURL(url);
-        }
-
-        function importSettings() {
-            const file = document.getElementById('import').files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = e => {
-                    const settings = JSON.parse(e.target.result);
-                    Object.assign(lanes, settings.lanes);
-                    fps = settings.fps;
-                    greenNumber = settings.greenNumber;
-                    saveSettings();
-                    location.reload();
-                };
-                reader.readAsText(file);
-            }
-        }
-
-        window.addEventListener('gamepadconnected', init);
-    </script>
+    <script src="script.js"></script>
 </body>
 </html>
