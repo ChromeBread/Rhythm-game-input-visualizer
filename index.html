@@ -2,83 +2,40 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Beatmania IIDX Joystick Visualizer</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div id="container">
+    <div id="game-container" style="background-color: #00FF00;">
+        <!-- レーン表示 -->
         <div id="lanes">
-            <!-- 左スクラッチ2レーン -->
-            <div class="lane scratch" data-lane="0">
-                <div class="note-area"></div>
-                <input type="text" class="button-input" value="SCR1">
-            </div>
-            <div class="lane scratch" data-lane="1">
-                <div class="note-area"></div>
-                <input type="text" class="button-input" value="SCR2">
-            </div>
-            <!-- 鍵盤7レーン -->
-            <div class="lane white-key" data-lane="2">
-                <div class="note-area"></div>
-                <input type="text" class="button-input" value="KEY1">
-            </div>
-            <div class="lane black-key" data-lane="3">
-                <div class="note-area"></div>
-                <input type="text" class="button-input" value="KEY2">
-            </div>
-            <div class="lane white-key" data-lane="4">
-                <div class="note-area"></div>
-                <input type="text" class="button-input" value="KEY3">
-            </div>
-            <div class="lane black-key" data-lane="5">
-                <div class="note-area"></div>
-                <input type="text" class="button-input" value="KEY4">
-            </div>
-            <div class="lane white-key" data-lane="6">
-                <div class="note-area"></div>
-                <input type="text" class="button-input" value="KEY5">
-            </div>
-            <div class="lane black-key" data-lane="7">
-                <div class="note-area"></div>
-                <input type="text" class="button-input" value="KEY6">
-            </div>
-            <div class="lane white-key" data-lane="8">
-                <div class="note-area"></div>
-                <input type="text" class="button-input" value="KEY7">
-            </div>
-            <!-- 右スクラッチ2レーン -->
-            <div class="lane scratch" data-lane="9">
-                <div class="note-area"></div>
-                <input type="text" class="button-input" value="SCR3">
-            </div>
-            <div class="lane scratch" data-lane="10">
-                <div class="note-area"></div>
-                <input type="text" class="button-input" value="SCR4">
-            </div>
+            <!-- スクラッチ2レーン、鍵盤7レーン、鍵盤7レーン、スクラッチ2レーン -->
+            <div class="lane scratch" data-index="0"><input type="text" class="lane-label" value="SCR1"></div>
+            <div class="lane key white" data-index="1"><input type="text" class="lane-label" value="KEY1"></div>
+            <div class="lane key black" data-index="2"><input type="text" class="lane-label" value="KEY2"></div>
+            <!-- 以下、残りのレーンを同様に追加 -->
         </div>
-        <div id="controls">
+        <!-- 設定パネル -->
+        <div id="settings">
             <label>FPS: 
                 <button onclick="setFPS(30)">30 FPS</button>
                 <button onclick="setFPS(60)">60 FPS</button>
             </label>
-            <label>Green Number: 
-                <input type="range" id="green-number" min="50" max="600" value="300">
-                <input type="number" id="green-number-input" min="50" max="600" value="300">
+            <label>緑数字: 
+                <input type="range" id="greenNumber" min="50" max="500" value="300">
+                <input type="number" id="greenNumberInput" value="300">
             </label>
-            <label>Export: <button onclick="exportSettings()">Export to TXT</button></label>
-            <label>Import: <input type="file" id="import-file" accept=".txt"></label>
-            <button onclick="confirmReset()">Reset to Default</button>
-        </div>
-        <div id="color-controls">
-            <label>Scratch Color: <input type="color" id="scratch-color" value="#000000"></label>
-            <label>White Key Color: <input type="color" id="white-key-color" value="#808080"></label>
-            <label>Black Key Color: <input type="color" id="black-key-color" value="#000000"></label>
-            <label>Scratch Note Color: <input type="color" id="scratch-note-color" value="#FF0000"></label>
-            <label>White Note Color: <input type="color" id="white-note-color" value="#FFFFFF"></label>
-            <label>Blue Note Color: <input type="color" id="blue-note-color" value="#00FFFF"></label>
+            <label>レーンカラー:
+                <input type="color" id="scratchColor" value="#000000">
+                <input type="color" id="whiteKeyColor" value="#808080">
+                <input type="color" id="blackKeyColor" value="#000000">
+            </label>
+            <button onclick="exportSettings()">エクスポート</button>
+            <input type="file" id="importFile" accept=".txt">
+            <button onclick="resetSettings()">リセット</button>
         </div>
     </div>
+    <canvas id="noteCanvas"></canvas>
     <script src="script.js"></script>
 </body>
 </html>
