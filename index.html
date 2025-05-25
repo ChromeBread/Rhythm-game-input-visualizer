@@ -10,24 +10,24 @@
     <div id="game-container">
         <div id="lanes">
             <!-- スクラッチ2 + 鍵盤7 + 鍵盤7 + スクラッチ2 = 18レーン -->
-            <div class="lane scratch" data-lane="0"><div class="note"></div><input type="text" class="lane-label" value="SCR1"></div>
-            <div class="lane scratch" data-lane="1"><div class="note"></div><input type="text" class="lane-label" value="SCR2"></div>
-            <div class="lane key white" data-lane="2"><div class="note"></div><input type="text" class="lane-label" value="KEY1"></div>
-            <div class="lane key black" data-lane="3"><div class="note"></div><input type="text" class="lane-label" value="KEY2"></div>
-            <div class="lane key white" data-lane="4"><div class="note"></div><input type="text" class="lane-label" value="KEY3"></div>
-            <div class="lane key black" data-lane="5"><div class="note"></div><input type="text" class="lane-label" value="KEY4"></div>
-            <div class="lane key white" data-lane="6"><div class="note"></div><input type="text" class="lane-label" value="KEY5"></div>
-            <div class="lane key black" data-lane="7"><div class="note"></div><input type="text" class="lane-label" value="KEY6"></div>
-            <div class="lane key white" data-lane="8"><div class="note"></div><input type="text" class="lane-label" value="KEY7"></div>
-            <div class="lane key white" data-lane="9"><div class="note"></div><input type="text" class="lane-label" value="KEY8"></div>
-            <div class="lane key black" data-lane="10"><div class="note"></div><input type="text" class="lane-label" value="KEY9"></div>
-            <div class="lane key white" data-lane="11"><div class="note"></div><input type="text" class="lane-label" value="KEY10"></div>
-            <div class="lane key black" data-lane="12"><div class="note"></div><input type="text" class="lane-label" value="KEY11"></div>
-            <div class="lane key white" data-lane="13"><div class="note"></div><input type="text" class="lane-label" value="KEY12"></div>
-            <div class="lane key black" data-lane="14"><div class="note"></div><input type="text" class="lane-label" value="KEY13"></div>
-            <div class="lane key white" data-lane="15"><div class="note"></div><input type="text" class="lane-label" value="KEY14"></div>
-            <div class="lane scratch" data-lane="16"><div class="note"></div><input type="text" class="lane-label" value="SCR3"></div>
-            <div class="lane scratch" data-lane="17"><div class="note"></div><input type="text" class="lane-label" value="SCR4"></div>
+            <div class="lane scratch" data-lane="0"><input type="text" class="lane-label" value="SCR1"></div>
+            <div class="lane scratch" data-lane="1"><input type="text" class="lane-label" value="SCR2"></div>
+            <div class="lane key white" data-lane="2"><input type="text" class="lane-label" value="KEY1"></div>
+            <div class="lane key black" data-lane="3"><input type="text" class="lane-label" value="KEY2"></div>
+            <div class="lane key white" data-lane="4"><input type="text" class="lane-label" value="KEY3"></div>
+            <div class="lane key black" data-lane="5"><input type="text" class="lane-label" value="KEY4"></div>
+            <div class="lane key white" data-lane="6"><input type="text" class="lane-label" value="KEY5"></div>
+            <div class="lane key black" data-lane="7"><input type="text" class="lane-label" value="KEY6"></div>
+            <div class="lane key white" data-lane="8"><input type="text" class="lane-label" value="KEY7"></div>
+            <div class="lane key white" data-lane="9"><input type="text" class="lane-label" value="KEY8"></div>
+            <div class="lane key black" data-lane="10"><input type="text" class="lane-label" value="KEY9"></div>
+            <div class="lane key white" data-lane="11"><input type="text" class="lane-label" value="KEY10"></div>
+            <div class="lane key black" data-lane="12"><input type="text" class="lane-label" value="KEY11"></div>
+            <div class="lane key white" data-lane="13"><input type="text" class="lane-label" value="KEY12"></div>
+            <div class="lane key black" data-lane="14"><input type="text" class="lane-label" value="KEY13"></div>
+            <div class="lane key white" data-lane="15"><input type="text" class="lane-label" value="KEY14"></div>
+            <div class="lane scratch" data-lane="16"><input type="text" class="lane-label" value="SCR3"></div>
+            <div class="lane scratch" data-lane="17"><input type="text" class="lane-label" value="SCR4"></div>
         </div>
         <div id="controls">
             <div class="control-group">
@@ -51,9 +51,7 @@
             </div>
             <div class="control-group">
                 <label>ボタン割り当て:</label>
-                <div id="button-assignments">
-                    <!-- 動的に生成 -->
-                </div>
+                <div id="button-assignments"></div>
             </div>
             <div class="control-group">
                 <button onclick="exportSettings()">エクスポート</button>
