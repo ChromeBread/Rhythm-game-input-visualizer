@@ -2,182 +2,251 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>IIDX Style Joystick Visualizer</title>
+    <title>Beatmania IIDX Joystick Visualizer</title>
     <style>
-        body { margin: 0; background: #000; color: #fff; font-family: Arial; }
-        #canvas { display: block; }
-        #controls { position: absolute; top: 10px; left: 10px; }
-        .lane { position: absolute; border: 1px solid #333; }
-        .note { position: absolute; background: #fff; border: 1px solid #000; }
-        .long-note { background: linear-gradient(to bottom, #fff, #aaa); }
-        button { margin: 5px; padding: 5px 10px; }
-        input[type="range"], input[type="number"] { margin: 5px; }
+        body { margin: 0; background: #000; font-family: Arial, sans-serif; color: #fff; }
+        #canvas { display: block; background: #000; }
+        .controls { padding: 10px; }
+        .lane { display: inline-block; text-align: center; margin: 0 2px; }
+        .lane-label { color: #fff; font-size: 12px; }
+        .note { position: absolute; width: 30px; height: 10px; border-radius: 2px; }
+        .config { margin: 10px; }
+        input[type="color"], input[type="text"] { width: 80px; }
+        #fps-toggle { padding: 5px 10px; }
+        #green-number { width: 60px; }
+        #export, #import { margin: 5px; }
+        #reset { background: #f00; color: #fff; padding: 5px 10px; }
     </style>
 </head>
 <body>
     <canvas id="canvas"></canvas>
-    <div id="controls">
-        <button onclick="setFps(30)">30 FPS</button>
-        <button onclick="setFps(60)">60 FPS</button>
-        <div>
-            <label>緑数字: <input type="number" id="greenNumber" value="330" min="100" max="600" step="10"></label>
-            <input type="range" id="greenSlider" value="330" min="100" max="600" step="10">
+    <div class="controls">
+        <div id="lanes"></div>
+        <div class="config">
+            <label>Green Number: <input type="range" id="green-number-slider" min="200" max="400" value="330"></label>
+            <input type="number" id="green-number" value="330" min="200" max="400"> ms
+            <button id="fps-toggle">Switch to 60fps</button>
+            <button id="export">Export Config</button>
+            <input type="file" id="import" accept=".txt">
+            <button id="reset">Reset to Default</button>
         </div>
     </div>
+
     <script>
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
-        canvas.width = 1280;
-        canvas.height = 720;
+        const lanesContainer = document.getElementById('lanes');
+        const fpsToggle = document.getElementById('fps-toggle');
+        const greenNumberSlider = document.getElementById('green-number-slider');
+        const greenNumberInput = document.getElementById('green-number');
+        const exportBtn = document.getElementById('export');
+        const importInput = document.getElementById('import');
+        const resetBtn = document.getElementById('reset');
 
-        // レーン設定
-        const lanes = [
-            { x: 100, color: '#FFFFFF' }, // 1鍵（白）
-            { x: 150, color: '#00A1D6' }, // 2鍵（青）
-            { x: 200, color: '#FFFFFF' }, // 3鍵（白）
-            { x: 250, color: '#00A1D6' }, // 4鍵（青）
-            { x: 300, color: '#FFFFFF' }, // 5鍵（白）
-            { x: 350, color: '#00A1D6' }, // 6鍵（青）
-            { x: 400, color: '#FFFFFF' }, // 7鍵（白）
-            { x: 450, color: '#FF0000' }, // スクラッチ（赤）
-            { x: 550, color: '#FFFFFF' }, // 8鍵（白）
-            { x: 600, color: '#00A1D6' }, // 9鍵（青）
-            { x: 650, color: '#FFFFFF' }, // 10鍵（白）
-            { x: 700, color: '#00A1D6' }, // 11鍵（青）
-            { x: 750, color: '#FFFFFF' }, // 12鍵（白）
-            { x: 800, color: '#00A1D6' }, // 13鍵（青）
-        ];
-        const laneWidth = 40;
-        const laneHeight = canvas.height - 100;
-        const noteHeight = 20;
-
-        // ボタン割り当て（ジョイスティックのボタンインデックス）
-        const buttonToLane = {
-            0: 0,  // ボタン0 → レーン1
-            1: 1,  // ボタン1 → レーン2
-            2: 2,  // ボタン2 → レーン3
-            3: 3,  // ボタン3 → レーン4
-            4: 4,  // ボタン4 → レーン5
-            5: 5,  // ボタン5 → レーン6
-            6: 6,  // ボタン6 → レーン7
-            7: 7,  // ボタン7 → スクラッチ
-            8: 8,  // ボタン8 → レーン8
-            9: 9,  // ボタン9 → レーン9
-            10: 10, // ボタン10 → レーン10
-            11: 11, // ボタン11 → レーン11
-            12: 12, // ボタン12 → レーン12
-            13: 13  // ボタン13 → レーン13
+        // デフォルト設定
+        let config = {
+            laneColors: [
+                '#000000', '#4a4a4a', '#000000', '#4a4a4a', '#000000', '#4a4a4a', '#000000', // 鍵盤
+                '#4a4a4a', '#000000', '#4a4a4a', '#000000', '#4a4a4a', '#000000', '#4a4a4a', // 鍵盤
+                '#ff0000', '#ff0000', '#ff0000', '#ff0000' // スクラッチ
+            ],
+            buttonAssignments: [
+                'LP', 'MP', 'HP', 'LK', 'MK', 'HK', 'P+K', // 鍵盤
+                'P', 'K', 'P+M', 'M+K', 'P+K', 'M', 'K', // 鍵盤
+                'SCR1', 'SCR2', 'SCR3', 'SCR4' // スクラッチ
+            ],
+            greenNumber: 330,
+            fps: 60
         };
 
-        let fps = 60;
-        let frameTime = 1000 / fps;
-        let greenNumber = 330;
-        let noteSpeed = (greenNumber * 0.016666 / 10) * fps; // フレームごとの移動距離
-        let notes = [];
-        let buttonStates = {};
-        let pressStartTimes = {};
+        // ローカルストレージから設定を読み込む
+        const savedConfig = localStorage.getItem('iidx-visualizer-config');
+        if (savedConfig) {
+            config = JSON.parse(savedConfig);
+        }
 
-        // 緑数字変更
-        const greenNumberInput = document.getElementById('greenNumber');
-        const greenSlider = document.getElementById('greenSlider');
-        greenNumberInput.addEventListener('input', () => {
-            greenSlider.value = greenNumberInput.value;
-            greenNumber = parseInt(greenNumberInput.value);
-            noteSpeed = (greenNumber * 0.016666 / 10) * fps;
+        const laneCount = 18;
+        const laneWidth = 30;
+        const laneHeight = 400;
+        canvas.width = laneWidth * laneCount;
+        canvas.height = laneHeight;
+
+        let notes = [];
+        let pressedButtons = {};
+        let frameTime = config.fps === 60 ? 1000 / 60 : 1000 / 30;
+
+        // レーン描画
+        function drawLanes() {
+            lanesContainer.innerHTML = '';
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            for (let i = 0; i < laneCount; i++) {
+                // キャンバスにレーン描画
+                ctx.fillStyle = config.laneColors[i];
+                ctx.fillRect(i * laneWidth, 0, laneWidth - 2, laneHeight);
+
+                // レーン下にラベルとカラー設定
+                const laneDiv = document.createElement('div');
+                laneDiv.className = 'lane';
+                laneDiv.innerHTML = `
+                    <input type="color" class="lane-color" data-index="${i}" value="${config.laneColors[i]}">
+                    <input type="text" class="lane-button" data-index="${i}" value="${config.buttonAssignments[i]}" size="4">
+                    <div class="lane-label">${config.buttonAssignments[i]}</div>
+                `;
+                lanesContainer.appendChild(laneDiv);
+            }
+        }
+
+        // ノーツ描画
+        function drawNotes() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawLanes();
+            const noteSpeed = laneHeight / (config.greenNumber * 0.01666 / 10); // 緑数字から速度計算
+            notes = notes.filter(note => note.y < laneHeight);
+            notes.forEach(note => {
+                ctx.fillStyle = note.isLong ? '#00ff00' : '#ffffff';
+                ctx.fillRect(note.lane * laneWidth, note.y, laneWidth - 2, note.isLong ? note.height : 10);
+                note.y += noteSpeed * (frameTime / 1000);
+                if (note.isLong && note.duration > 0) {
+                    note.height = Math.max(10, (note.duration / 1000) * noteSpeed);
+                    note.duration -= frameTime;
+                }
+            });
+        }
+
+        // ジョイスティック入力ハンドリング（仮：キー入力でシミュレーション）
+        document.addEventListener('keydown', e => {
+            const button = e.key.toUpperCase();
+            if (!pressedButtons[button]) {
+                pressedButtons[button] = { startTime: Date.now() };
+                const laneIndex = config.buttonAssignments.indexOf(button);
+                if (laneIndex !== -1) {
+                    notes.push({ lane: laneIndex, y: 0, isLong: false, duration: 0 });
+                }
+            }
         });
-        greenSlider.addEventListener('input', () => {
-            greenNumberInput.value = greenSlider.value;
-            greenNumber = parseInt(greenSlider.value);
-            noteSpeed = (greenNumber * 0.016666 / 10) * fps;
+
+        document.addEventListener('keyup', e => {
+            const button = e.key.toUpperCase();
+            if (pressedButtons[button]) {
+                const duration = Date.now() - pressedButtons[button].startTime;
+                if (duration >= 67) { // 0.067秒以上でロングノーツ
+                    const laneIndex = config.buttonAssignments.indexOf(button);
+                    if (laneIndex !== -1) {
+                        const note = notes.find(n => n.lane === laneIndex && !n.isLong);
+                        if (note) {
+                            note.isLong = true;
+                            note.duration = duration;
+                        }
+                    }
+                }
+                delete pressedButtons[button];
+            }
         });
 
         // FPS切り替え
-        function setFps(newFps) {
-            fps = newFps;
-            frameTime = 1000 / fps;
-            noteSpeed = (greenNumber * 0.016666 / 10) * fps;
-        }
-
-        // ノーツ管理
-        class Note {
-            constructor(lane, isLong = false, startTime = Date.now()) {
-                this.lane = lane;
-                this.y = 0;
-                this.isLong = isLong;
-                this.startTime = startTime;
-                this.endTime = isLong ? null : startTime;
-            }
-            update() {
-                this.y += noteSpeed;
-                if (this.y > canvas.height) return false;
-                return true;
-            }
-            draw() {
-                ctx.fillStyle = lanes[this.lane].color;
-                if (this.isLong && !this.endTime) {
-                    ctx.fillRect(lanes[this.lane].x, this.y, laneWidth, canvas.height - this.y);
-                } else {
-                    ctx.fillRect(lanes[this.lane].x, this.y, laneWidth, noteHeight);
-                }
-            }
-        }
-
-        // ゲームパッド入力
-        function handleGamepad() {
-            const gamepads = navigator.getGamepads();
-            for (let gamepad of gamepads) {
-                if (!gamepad) continue;
-                gamepad.buttons.forEach((button, index) => {
-                    if (button.pressed && !buttonStates[index]) {
-                        buttonStates[index] = true;
-                        pressStartTimes[index] = Date.now();
-                        if (buttonToLane[index] !== undefined) {
-                            notes.push(new Note(buttonToLane[index]));
-                        }
-                    } else if (!button.pressed && buttonStates[index]) {
-                        buttonStates[index] = false;
-                        const pressDuration = (Date.now() - pressStartTimes[index]) / 1000;
-                        if (pressDuration >= 0.067 && buttonToLane[index] !== undefined) {
-                            const note = notes.find(n => n.lane === buttonToLane[index] && !n.endTime);
-                            if (note) note.isLong = true;
-                        }
-                        notes.forEach(n => {
-                            if (n.lane === buttonToLane[index] && !n.endTime) {
-                                n.endTime = Date.now();
-                            }
-                        });
-                    }
-                });
-            }
-        }
-
-        // 描画ループ
-        function animate() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            // レーン描画
-            lanes.forEach(lane => {
-                ctx.fillStyle = lane.color;
-                ctx.fillRect(lane.x, 0, laneWidth, laneHeight);
-            });
-
-            // ノーツ更新と描画
-            notes = notes.filter(note => note.update());
-            notes.forEach(note => note.draw());
-
-            // ゲームパッド処理
-            handleGamepad();
-
-            setTimeout(animate, frameTime);
-        }
-
-        // ゲームパッド接続検知
-        window.addEventListener('gamepadconnected', (e) => {
-            console.log('Gamepad connected:', e.gamepad);
-            animate();
+        fpsToggle.addEventListener('click', () => {
+            config.fps = config.fps === 60 ? 30 : 60;
+            frameTime = 1000 / config.fps;
+            fpsToggle.textContent = `Switch to ${config.fps === 60 ? 30 : 60}fps`;
+            saveConfig();
         });
 
-        // 初期描画
+        // 緑数字設定
+        greenNumberSlider.addEventListener('input', () => {
+            config.greenNumber = parseInt(greenNumberSlider.value);
+            greenNumberInput.value = config.greenNumber;
+            saveConfig();
+        });
+        greenNumberInput.addEventListener('input', () => {
+            config.greenNumber = Math.min(400, Math.max(200, parseInt(greenNumberInput.value) || 330));
+            greenNumberSlider.value = config.greenNumber;
+            saveConfig();
+        });
+
+        // カラーとボタン割り当て変更
+        lanesContainer.addEventListener('input', e => {
+            const index = parseInt(e.target.dataset.index);
+            if (e.target.classList.contains('lane-color')) {
+                config.laneColors[index] = e.target.value;
+            } else if (e.target.classList.contains('lane-button')) {
+                config.buttonAssignments[index] = e.target.value.toUpperCase();
+                lanesContainer.querySelectorAll('.lane-label')[index].textContent = e.target.value.toUpperCase();
+            }
+            saveConfig();
+        });
+
+        // 設定保存
+        function saveConfig() {
+            localStorage.setItem('iidx-visualizer-config', JSON.stringify(config));
+        }
+
+        // エクスポート
+        exportBtn.addEventListener('click', () => {
+            const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'iidx-visualizer-config.txt';
+            a.click();
+            URL.revokeObjectURL(url);
+        });
+
+        // インポート
+        importInput.addEventListener('change', e => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = event => {
+                    try {
+                        config = JSON.parse(event.target.result);
+                        drawLanes();
+                        greenNumberSlider.value = config.greenNumber;
+                        greenNumberInput.value = config.greenNumber;
+                        fpsToggle.textContent = `Switch to ${config.fps === 60 ? 30 : 60}fps`;
+                        frameTime = 1000 / config.fps;
+                        saveConfig();
+                    } catch (err) {
+                        alert('Invalid config file');
+                    }
+                };
+                reader.readAsText(file);
+            }
+        });
+
+        // リセット
+        resetBtn.addEventListener('click', () => {
+            if (confirm('Are you sure you want to reset to default?')) {
+                config = {
+                    laneColors: [
+                        '#000000', '#4a4a4a', '#000000', '#4a4a4a', '#000000', '#4a4a4a', '#000000',
+                        '#4a4a4a', '#000000', '#4a4a4a', '#000000', '#4a4a4a', '#000000', '#4a4a4a',
+                        '#ff0000', '#ff0000', '#ff0000', '#ff0000'
+                    ],
+                    buttonAssignments: [
+                        'LP', 'MP', 'HP', 'LK', 'MK', 'HK', 'P+K',
+                        'P', 'K', 'P+M', 'M+K', 'P+K', 'M', 'K',
+                        'SCR1', 'SCR2', 'SCR3', 'SCR4'
+                    ],
+                    greenNumber: 330,
+                    fps: 60
+                };
+                drawLanes();
+                greenNumberSlider.value = config.greenNumber;
+                greenNumberInput.value = config.greenNumber;
+                fpsToggle.textContent = 'Switch to 30fps';
+                frameTime = 1000 / 60;
+                saveConfig();
+            }
+        });
+
+        // アニメーションループ
+        function animate() {
+            drawNotes();
+            setTimeout(() => requestAnimationFrame(animate), frameTime);
+        }
+
+        // 初期化
+        drawLanes();
         animate();
     </script>
 </body>
